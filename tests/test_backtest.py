@@ -78,3 +78,16 @@ def test_metrics_on_a_known_series():
 def test_too_little_data_raises(returns):
     with pytest.raises(ValueError):
         run_backtest(returns.iloc[:100], {"1/N": equal_weight_strategy()}, window=120)
+
+
+def test_known_data_error_is_corrected():
+    from portfolio import to_returns
+
+    dates = pd.to_datetime(["2016-06-30", "2016-07-01", "2016-07-05", "2016-07-06"])
+    prices = pd.DataFrame({"DHR": [41.4, 41.9, 67.6, 67.8], "AAA": [10.0, 10.1, 10.0, 10.2],
+                           "BBB": [20.0, 20.0, 20.2, 20.1]}, index=dates)
+    raw = to_returns(prices, fix_known_errors=False)
+    fixed = to_returns(prices)
+    assert raw.loc["2016-07-05", "DHR"] > 0.6
+    assert fixed.loc["2016-07-05", "DHR"] == pytest.approx(np.median([10.0 / 10.1 - 1, 20.2 / 20.0 - 1]))
+    assert fixed.drop(index=pd.Timestamp("2016-07-05")).equals(raw.drop(index=pd.Timestamp("2016-07-05")))

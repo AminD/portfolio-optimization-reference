@@ -25,6 +25,12 @@ SECTORS = {
 SECTOR_OF = {ticker: sector for sector, tickers in SECTORS.items() for ticker in tickers.split()}
 
 
+# Returns that are artefacts of the data source, not market moves. Yahoo's
+# adjusted prices mishandle some spin-offs: Danaher appears to gain 61% on the
+# day it spun off Fortive, when shareholders in fact received Fortive shares.
+KNOWN_DATA_ERRORS = [("DHR", "2016-07-05")]
+
+
 def load_prices(path) -> pd.DataFrame:
     """Read the CSV written by ``scripts/download_prices.py`` (dates x tickers)."""
     prices = pd.read_csv(path, index_col=0, parse_dates=True).sort_index()
@@ -34,13 +40,20 @@ def load_prices(path) -> pd.DataFrame:
     return prices.ffill().dropna(axis=1, how="any")
 
 
-def to_returns(prices: pd.DataFrame) -> pd.DataFrame:
+def to_returns(prices: pd.DataFrame, fix_known_errors: bool = True) -> pd.DataFrame:
     """Daily simple returns, P_t / P_{t-1} - 1.
 
     Simple (not log) returns are used because the return of a portfolio is the
-    weighted average of the simple returns of its assets.
+    weighted average of the simple returns of its assets. Returns listed in
+    ``KNOWN_DATA_ERRORS`` are corrected unless ``fix_known_errors`` is False.
     """
-    return prices.pct_change().iloc[1:]
+    returns = prices.pct_change().iloc[1:]
+    if fix_known_errors:
+        for ticker, day in KNOWN_DATA_ERRORS:
+            if ticker in returns.columns and pd.Timestamp(day) in returns.index:
+                # Replace the bogus value by the median return of the other stocks that day.
+                returns.loc[pd.Timestamp(day), ticker] = returns.loc[pd.Timestamp(day)].drop(ticker).median()
+    return returns
 
 
 def split_benchmark(returns: pd.DataFrame, benchmark: str = BENCHMARK) -> tuple[pd.DataFrame, pd.Series | None]:

@@ -116,3 +116,15 @@ def test_black_litterman_view_tilts_the_portfolio(true_cov):
     assert view @ equilibrium < view @ posterior < target
     # Assets not involved in the view keep their market weight.
     assert weights[2:] == pytest.approx(market[2:], abs=1e-8)
+
+
+def test_singular_covariance_gives_a_clear_error(returns):
+    """30 observations for 40 assets: the sample matrix cannot be inverted."""
+    from portfolio import covariance as cov
+
+    singular = cov.sample_covariance(returns.iloc[:30])
+    with pytest.raises(ValueError, match="singular"):
+        opt.min_variance(singular, long_only=False)
+    # The long-only problem is still well posed, and so is a cleaned estimator.
+    assert opt.min_variance(singular).sum() == pytest.approx(1.0)
+    assert opt.min_variance(cov.rmt_clipped(returns.iloc[:30]), long_only=False).sum() == pytest.approx(1.0)

@@ -46,6 +46,15 @@ def _solve_qp(covariance, linear, long_only: bool, max_weight: float | None, sta
     return weights / weights.sum()
 
 
+def _check_invertible(covariance: np.ndarray) -> None:
+    """Closed-form solutions need the inverse covariance, which must exist."""
+    if np.linalg.cond(covariance) > 1e12:
+        raise ValueError(
+            "the covariance matrix is singular (fewer observations than assets?): "
+            "use a longer window, a cleaned estimator, or a long-only constraint"
+        )
+
+
 def min_variance(covariance: np.ndarray, long_only: bool = True, max_weight: float | None = None) -> np.ndarray:
     """Portfolio with the smallest variance.
 
@@ -56,6 +65,7 @@ def min_variance(covariance: np.ndarray, long_only: bool = True, max_weight: flo
     """
     n = covariance.shape[0]
     if not long_only and max_weight is None:
+        _check_invertible(covariance)
         raw = np.linalg.solve(covariance, np.ones(n))
         return raw / raw.sum()
     return _solve_qp(covariance, np.zeros(n), long_only, max_weight)

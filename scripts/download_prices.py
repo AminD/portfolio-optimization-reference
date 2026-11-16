@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import date
 
 import pandas as pd
 import yfinance as yf
@@ -43,7 +44,10 @@ def main() -> None:
     symbols = TICKERS + [BENCHMARK]
     print(f"Downloading {len(symbols)} tickers from {args.start} (this takes about a minute)...")
     try:
-        data = yf.download(symbols, start=args.start, auto_adjust=True, progress=False, threads=True)
+        # ``end`` is exclusive: today's bar is left out because it is incomplete
+        # while the market is open, and one partial day would distort the returns.
+        data = yf.download(symbols, start=args.start, end=date.today().isoformat(), auto_adjust=True,
+                           progress=False, threads=True)
     except Exception as error:
         sys.exit(f"Download failed: {error}")
     if data.empty:

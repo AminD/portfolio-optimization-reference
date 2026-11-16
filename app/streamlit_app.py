@@ -218,7 +218,7 @@ elif page == "Correlations and noise":
         fig.add_trace(go.Scatter(x=grid, y=rmt.marchenko_pastur_pdf(grid, spectrum.q, spectrum.bulk_variance),
                                  name="Pure noise (Marchenko-Pastur)", line=dict(color=ORANGE, width=2.5)))
         fig.add_vline(x=spectrum.noise_edge, line=dict(color=GRAY, dash="dot"))
-        fig.update_layout(**plotly_layout("Most eigenvalues look exactly like noise", hovermode="closest",
+        fig.update_layout(**plotly_layout("Most eigenvalues fall inside the noise band", hovermode="closest",
                                           xaxis_title="Eigenvalue (the few largest are off the chart)",
                                           yaxis_title="Density", bargap=0.02))
         show(fig)
@@ -227,10 +227,15 @@ elif page == "Correlations and noise":
         colors = [BLUE if value > spectrum.noise_edge else GRID for value in spectrum.eigenvalues[:top]]
         fig = go.Figure(go.Bar(x=[f"{i + 1}" for i in range(top)], y=spectrum.eigenvalues[:top], marker_color=colors,
                                hovertemplate="Eigenvalue %{x}: %{y:.2f}<extra></extra>"))
-        fig.add_hline(y=spectrum.noise_edge, line=dict(color=GRAY, dash="dot"),
-                      annotation_text="noise edge", annotation_position="top right")
+        fig.add_hline(y=spectrum.noise_edge, line=dict(color=GRAY, dash="dot"))
+        # On a log axis, annotation coordinates are given in log10 units.
+        fig.add_annotation(x=top - 1, y=np.log10(spectrum.noise_edge), text="noise edge", showarrow=False,
+                           yshift=10, xanchor="right", font=dict(size=11, color=INK_SOFT))
+        ticks = [t for t in (0.5, 1, 2, 5, 10, 20, 50) if t <= 1.5 * spectrum.eigenvalues[0]]
         fig.update_layout(**plotly_layout("The largest eigenvalues stand far above it", hovermode="closest",
-                                          yaxis_type="log", xaxis_title="Rank", yaxis_title="Eigenvalue (log scale)"))
+                                          xaxis_title="Rank", yaxis_title="Eigenvalue (log scale)",
+                                          yaxis=dict(type="log", tickmode="array", tickvals=ticks,
+                                                     ticktext=[f"{t:g}" for t in ticks], gridcolor=GRID)))
         show(fig)
 
     st.subheader("What the significant eigenvectors mean")
@@ -243,13 +248,14 @@ elif page == "Correlations and noise":
     fig = go.Figure(go.Bar(x=order, y=vector, marker_color=[shade[s] for s in sector_list], customdata=sector_list,
                            hovertemplate="<b>%{x}</b> · %{customdata}<br>Component %{y:.3f}<extra></extra>"))
     position = 0
-    for name in pd.unique(sector_list):
+    for i, name in enumerate(pd.unique(sector_list)):
         size = int((sector_list == name).sum())
-        fig.add_annotation(x=position + (size - 1) / 2, y=1.06, yref="paper", text=name if size > 2 else "",
+        # Sector names alternate between two lines so that neighbours never overlap.
+        fig.add_annotation(x=position + (size - 1) / 2, y=1.05 if i % 2 == 0 else 1.14, yref="paper", text=name,
                            showarrow=False, font=dict(size=10, color=INK_SOFT))
         position += size
     status = "above the noise edge" if spectrum.eigenvalues[mode - 1] > spectrum.noise_edge else "inside the noise band"
-    fig.update_layout(**plotly_layout(None, height=360, hovermode="closest", margin=dict(l=10, r=10, t=40, b=10),
+    fig.update_layout(**plotly_layout(None, height=380, hovermode="closest", margin=dict(l=10, r=10, t=64, b=10),
                                       xaxis=dict(tickfont=dict(size=9), tickangle=-90), yaxis_title="Component"))
     show(fig)
     participation = 1 / rmt.inverse_participation_ratio(spectrum.eigenvectors)[mode - 1]
@@ -310,7 +316,7 @@ elif page == "Portfolio builder":
         ("Predicted volatility", f"{predicted_vol:.1%}", f"equal weight: {equal_vol:.1%}"),
         ("Stocks held", f"{held} of {n_assets}", f"effective number {effective:.1f}"),
         ("Largest position", f"{weights.max():.1%}", weights.idxmax()),
-        ("Short exposure", f"{-weights[weights < 0].sum():.0%}", "sum of negative weights"),
+        ("Short exposure", f"{max(0.0, -weights[weights < 0].sum()):.0%}", "sum of negative weights"),
     ])
 
     left, right = st.columns([3, 2])
